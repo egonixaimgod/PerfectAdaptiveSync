@@ -38,6 +38,7 @@ Csak akkor ír, ha megnyomsz egy Javítás gombot (vagy bepipálod az „ACM min
 ## Tesztek
 
 - `test.bat` – önteszt (EDID parser, RTSS config, registry merge); semmit nem ír a gépre.
+- `rebuild_es_github_push.bat` – önteszt, build, commit + push, és az exe GitHub Release-ként (`build-N`).
 - `verify.bat` – minden javítást ténylegesen lefuttat: rossz értéket ír, javít, független forrásból visszaolvas, majd visszaállítja az eredetit. Adminként futtasd.
 
 ## Licenc

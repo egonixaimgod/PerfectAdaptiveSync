@@ -10,4 +10,4 @@ if errorlevel 1 (
   exit /b 1
 )
 echo Kesz: PerfectAdaptiveSync.exe
-start "" PerfectAdaptiveSync.exe
+if /i not "%~1"=="nostart" start "" PerfectAdaptiveSync.exe

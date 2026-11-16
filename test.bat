@@ -9,5 +9,5 @@ if errorlevel 1 (
 )
 "%TEMP%\pas-selftest.exe"
 set RESULT=%errorlevel%
-pause
+if /i not "%~1"=="nopause" pause
 exit /b %RESULT%
