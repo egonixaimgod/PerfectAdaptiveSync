@@ -87,6 +87,9 @@ static class VerifyFixes {
       var txt = File.ReadAllLines(tmp);
       Ok("RTSS limit", txt.Contains("Limit=258220") && txt.Contains("LimitDenominator=1000") && Math.Abs(Rtss.Parse(tmp).Cap - 258.22) < 1e-9,
          "fajlban: " + string.Join(" ", txt.Where(l => l.StartsWith("Limit"))));
+      Rtss.SetKey(tmp, "PassiveWait", "1", false);
+      Rtss.SetKey(tmp, "PassiveWait", "0", false);
+      Ok("RTSS passive waiting", File.ReadAllLines(tmp).Contains("PassiveWait=0") && Rtss.Parse(tmp).PassiveWait == 0, "rossz=1 -> javitas utan=" + Rtss.Parse(tmp).PassiveWait);
       File.Delete(tmp); File.Delete(tmp + ".pas-backup");
     } else Console.WriteLine("[--]   RTSS nincs telepitve");
 

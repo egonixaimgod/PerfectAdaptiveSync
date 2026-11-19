@@ -7,7 +7,7 @@ Egyetlen ablakban megmutatja, hogy a G-SYNC / FreeSync beállításod rendben va
 ## Mit csinál
 
 - **Pontos frissítési ráta** a tényleges timingból (pl. 279.9997 Hz), pixel clock, total, CRU kalkulátor.
-- **Checklist** a Blur Busters G-SYNC 101 alapján: G-SYNC, NVCP V-SYNC, Low Latency Mode, power management, RTSS limit, max Hz, natív felbontás, VRR tartomány, HAGS, Game Mode, Windows VRR. A piros sorok mellett **Javítás** gomb van, felül **Mindet javítsd**.
+- **Checklist** a Blur Busters G-SYNC 101 alapján: G-SYNC, NVCP V-SYNC, Low Latency Mode, power management, RTSS limit, RTSS passive waiting, max Hz, natív felbontás, VRR tartomány, HAGS, Game Mode, Windows VRR. A piros sorok mellett **Javítás** gomb van, felül **Mindet javítsd**, ami utána felajánlja a gép újraindítását (a HAGS csak utána él).
 - **FPS cap** kiszámolva: `Hz − Hz²/3600`, és beírja az RTSS-be (az RTSS újraindítása nélkül).
 - **Visszaállítás**: minden, amit a program átírt, visszaállítható az eredeti értékre (a fejlécben, egyenként vagy egyszerre).
 - **EDID nézet**: amit a monitor / a CRU override mond (DTD, CTA, DisplayID, FreeSync és HDMI VRR tartomány).
@@ -33,7 +33,7 @@ Nem kell hozzá SDK, a Windows beépített C# fordítóját használja.
 
 ## Mit ír át a gépen
 
-Csak akkor ír, ha megnyomsz egy Javítás gombot (vagy bepipálod az „ACM mindig tiltva" jelölőt, ami kikapcsolva tartja a Windows automatikus színkezelését): NVIDIA globális / játékprofil beállítás, RTSS profil `Limit` sora (első íráskor `.pas-backup` másolat készül mellé), a kijelző frissítési rátája, és három Windows registry érték (HAGS, Game Mode, DirectX VRR / ablakos optimalizálás). Az eredeti értékeket a `HKCU\Software\PerfectAdaptiveSync\Undo` kulcs őrzi a visszaállításhoz.
+Csak akkor ír, ha megnyomsz egy Javítás gombot (vagy bepipálod az „ACM mindig tiltva" jelölőt, ami kikapcsolva tartja a Windows automatikus színkezelését): NVIDIA globális / játékprofil beállítás, RTSS profil `Limit` és `PassiveWait` sora (első íráskor `.pas-backup` másolat készül mellé), a kijelző frissítési rátája, és három Windows registry érték (HAGS, Game Mode, DirectX VRR / ablakos optimalizálás). Az eredeti értékeket a `HKCU\Software\PerfectAdaptiveSync\Undo` kulcs őrzi a visszaállításhoz.
 
 ## Tesztek
 

@@ -119,6 +119,9 @@ static class SelfTest {
     Assert(string.Join("|", Rtss.WithLimit(ini, 258.22)) == "[OSD]|X=1|[Framerate]|Limit=258220|LimitDenominator=1000|LimitTime=0|LimitTimeDenominator=1|SyncLimiter=1|[Other]|Y=2",
            "RTSS: csak a Limit/LimitDenominator sor valtozik");
     Assert(string.Join("|", Rtss.WithLimit(new[] { "[OSD]" }, 100)) == "[OSD]|[Framerate]|Limit=100000|LimitDenominator=1000", "RTSS: hianyzo [Framerate] szekcio letrejon");
+    var pw = new[] { "[Framerate]", "Limit=60", "PassiveWait=1", "[OSD]", "PassiveWait=1" };
+    Assert(string.Join("|", Rtss.WithFramerate(pw, "PassiveWait=0")) == "[Framerate]|PassiveWait=0|Limit=60|[OSD]|PassiveWait=1", "RTSS: PassiveWait csak a [Framerate]-ben valtozik");
+    Assert(Rtss.Get(pw, "PassiveWait") == "1" && Rtss.Get(ini, "SyncLimiter") == "1" && Rtss.Get(ini, "X") == null, "RTSS: Get csak a [Framerate]-bol olvas");
 
     Assert(Win.DxMerge(null, "VRROptimizeEnable", "1") == "VRROptimizeEnable=1;", "DX: ures ertekbol");
     Assert(Win.DxMerge("VRROptimizeEnable=0;SwapEffectUpgradeEnable=1;", "VRROptimizeEnable", "1") == "SwapEffectUpgradeEnable=1;VRROptimizeEnable=1;", "DX: meglevo kulcs csere, a tobbi marad");

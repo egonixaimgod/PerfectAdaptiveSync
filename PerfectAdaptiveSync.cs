@@ -589,7 +589,7 @@ public static class Nv {
 
 // RTSS profilok: [Framerate] Limit/LimitDenominator, SyncLimiter (0 async, 1 front edge, 2 back edge)
 public static class Rtss {
-  public class Profile { public string Name, Path; public double Cap; public int Mode = -1; public bool HasLimit; }
+  public class Profile { public string Name, Path; public double Cap; public int Mode = -1, PassiveWait = -1; public bool HasLimit; }
 
   public static string Dir {
     get {
@@ -613,6 +613,7 @@ public static class Rtss {
       if (kv[0] == "Limit") { lim = v; pr.HasLimit = true; }
       else if (kv[0] == "LimitDenominator" && v > 0) den = v;
       else if (kv[0] == "SyncLimiter") pr.Mode = (int)v;
+      else if (kv[0] == "PassiveWait") pr.PassiveWait = (int)v;
     }
     pr.Cap = lim / den;
     return pr;
@@ -625,15 +626,15 @@ public static class Rtss {
     return System.IO.Directory.GetFiles(dir, "*.cfg").Select(Parse).Where(p => p != null && p.HasLimit).ToList();
   }
 
-  // a [Framerate] szekcio Limit/LimitDenominator sorait cseréli, minden mas marad
-  public static List<string> WithLimit(IEnumerable<string> lines, double cap) {
-    string[] mine = { "Limit=" + (long)Math.Round(cap * 1000), "LimitDenominator=1000" };
+  // a [Framerate] szekcio megadott "kulcs=ertek" sorait csereli (a fejlec utan), minden mas marad
+  public static List<string> WithFramerate(IEnumerable<string> lines, params string[] mine) {
+    var keys = mine.Select(s => s.Split('=')[0] + "=").ToArray();
     var outp = new List<string>();
     bool inFr = false, done = false;
     foreach (var raw in lines) {
       string t = raw.Trim();
       if (t.StartsWith("[")) inFr = t == "[Framerate]";
-      else if (inFr && (t.StartsWith("Limit=") || t.StartsWith("LimitDenominator="))) continue;
+      else if (inFr && keys.Any(k => t.StartsWith(k))) continue;
       outp.Add(raw);
       if (inFr && t == "[Framerate]") { outp.AddRange(mine); done = true; }
     }
@@ -641,14 +642,46 @@ public static class Rtss {
     return outp;
   }
 
-  public static void SetLimit(string path, double cap, bool apply = true) {
+  public static List<string> WithLimit(IEnumerable<string> lines, double cap) {
+    return WithFramerate(lines, "Limit=" + (long)Math.Round(cap * 1000), "LimitDenominator=1000");
+  }
+
+  // a [Framerate] szekcio egy kulcsanak nyers erteke; null, ha nincs
+  public static string Get(IEnumerable<string> lines, string key) {
+    bool inFr = false;
+    foreach (var raw in lines) {
+      string t = raw.Trim();
+      if (t.StartsWith("[")) { inFr = t == "[Framerate]"; continue; }
+      if (inFr && t.StartsWith(key + "=")) return t.Substring(key.Length + 1);
+    }
+    return null;
+  }
+
+  static readonly Encoding Enc = Encoding.Default;  // az RTSS ANSI-ban ir; UTF-8-kent olvasva az ekezetes ertekek elromlananak
+
+  static void Write(string path, Func<IEnumerable<string>, List<string>> edit) {
     string backup = path + ".pas-backup";
     if (!System.IO.File.Exists(backup)) System.IO.File.Copy(path, backup);
+    System.IO.File.WriteAllLines(path, edit(System.IO.File.ReadAllLines(path, Enc)), Enc);
+  }
+
+  public static void SetLimit(string path, double cap, bool apply = true) {
     var before = Parse(path);
-    var enc = Encoding.Default;  // az RTSS ANSI-ban ir; UTF-8-kent olvasva az ekezetes ertekek elromlananak
-    System.IO.File.WriteAllLines(path, WithLimit(System.IO.File.ReadAllLines(path, enc), cap), enc);
+    Write(path, l => WithLimit(l, cap));
     if (before != null) Undo.Save("rtss|" + path, before.Cap.ToString("R", CultureInfo.InvariantCulture));
-    if (!apply) return;
+    if (apply) Apply();
+  }
+
+  // pl. PassiveWait=0; az eredeti erteket a Visszaallitas orzi
+  public static void SetKey(string path, string key, string val, bool apply = true) {
+    string orig = Get(System.IO.File.ReadAllLines(path, Enc), key);
+    Write(path, l => WithFramerate(l, key + "=" + val));
+    if (orig != null) Undo.Save("rtsskey|" + key + "|" + path, orig);
+    if (apply) Apply();
+  }
+
+  // a futo RTSS ujraolvassa a profilokat
+  static void Apply() {
     var running = Process.GetProcessesByName("RTSS");
     if (running.Length == 0 || UpdateProfiles()) return;
     // regi RTSS profil API nelkul: csak indulaskor olvassa be a profilokat
@@ -761,6 +794,7 @@ public static class Undo {
     else if (a[0] == "nvprofile") Nv.SetOverride(a[2], Convert.ToUInt32(a[1], 16), uint.Parse(v));
     else if (a[0] == "reg") Win.Restore(a[1], a[2], v);
     else if (a[0] == "rtss") Rtss.SetLimit(a[1], double.Parse(v, CultureInfo.InvariantCulture));
+    else if (a[0] == "rtsskey") Rtss.SetKey(a[2], a[1], v);
     else if (a[0] == "mode") { var m = v.Split('|'); Probe.SetMode(a[1], int.Parse(m[0]), int.Parse(m[1]), int.Parse(m[2])); }
     using (var k = Registry.CurrentUser.OpenSubKey(Key, true)) k.DeleteValue(what, false);
   }
@@ -1019,16 +1053,20 @@ class MainForm : Form {
     }
     if (a[0] == "reg") return a[2] == "HwSchMode" ? "HAGS" : a[2] == "AutoGameModeEnabled" ? "Windows Game Mode" : a[2] == "DirectXUserGlobalSettings" ? "Windows VRR / ablakos optimalizálás" : a[2];
     if (a[0] == "rtss") return "RTSS limit: " + System.IO.Path.GetFileName(a[1]);
+    if (a[0] == "rtsskey") return "RTSS " + a[1] + ": " + System.IO.Path.GetFileName(a[2]);
     if (a[0] == "mode") return "Frissítési ráta: " + a[1];
     return what;
   }
 
   static bool IsAdmin() { return new WindowsPrincipal(WindowsIdentity.GetCurrent()).IsInRole(WindowsBuiltInRole.Administrator); }
 
-  void RunFix(Action fix) {
+  // true, ha a javitas hiba nelkul lefutott
+  bool RunFix(Action fix) {
+    bool ok = false;
     try {
       Nv.Saved = false;
       fix();
+      ok = true;
       if (Nv.Saved && Process.GetProcessesByName("nvcplui").Length > 0)
         MessageBox.Show(this, "Elmentve. A nyitva lévő NVIDIA Control Panel még a régi értékeket mutatja: zárd be és nyisd meg újra.\nAddig ne nyomj benne Apply-t, mert visszaírja a régit!",
                         "NVIDIA Control Panel", MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -1042,12 +1080,25 @@ class MainForm : Form {
             Close();
           } catch (Win32Exception) { }  // a UAC ablakot elutasitotta
         }
-        return;
+        return false;
       }
       MessageBox.Show(this, ex.Message, "Hiba", MessageBoxButtons.OK, MessageBoxIcon.Error);
     }
     nvOverrides = null;
     BeginInvoke((Action)Reload);  // a gomb a sajat Click-jeben ne dobodjon ki
+    return ok;
+  }
+
+  // "Mindet javítsd" utan: a HAGS es a driver egy resze csak ujrainditas utan el
+  void AskReboot() {
+    if (MessageBox.Show(this, "Kész, minden javítás lefutott.\n\nA HAGS és a driver-beállítások egy része csak a gép újraindítása után él teljesen, ezért érdemes most újraindítani.\nElőtte mentsd el a nyitott munkáidat!\n\nÚjraindítod most a gépet?",
+                        "Újraindítás", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) {
+      MessageBox.Show(this, "Rendben, most nem indítom újra.\n\nDe indítsd újra a gépet, amint tudod, mert addig nem minden javítás él!",
+                      "Újraindítás később", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+      return;
+    }
+    try { Process.Start(new ProcessStartInfo("shutdown.exe", "/r /t 0") { UseShellExecute = false, CreateNoWindow = true }); }
+    catch (Exception ex) { MessageBox.Show(this, "Nem sikerült újraindítani: " + ex.Message + "\nIndítsd újra kézzel.", "Hiba", MessageBoxButtons.OK, MessageBoxIcon.Error); }
   }
 
   // ---------- elo VRR monitor ----------
@@ -1284,7 +1335,7 @@ class MainForm : Form {
     summary = L("", Fg, 11f, FontStyle.Bold);
     summary.Margin = new Padding(0, 0, 0, S(6));
     fixAll = Btn("Mindet javítsd"); fixAll.Anchor = AnchorStyles.Right; fixAll.Visible = false;
-    fixAll.Click += (s, e) => RunFix(() => RunAll(fixes.ToList()));
+    fixAll.Click += (s, e) => { if (RunFix(() => RunAll(fixes.ToList()))) AskReboot(); };
     int sr = chk.RowCount++;
     chk.RowStyles.Add(new RowStyle(SizeType.AutoSize));
     chk.Controls.Add(summary, 0, sr); chk.SetColumnSpan(summary, 2); chk.Controls.Add(fixAll, 2, sr);
@@ -1325,6 +1376,10 @@ class MainForm : Form {
             () => Rtss.SetLimit(gp.Path, vrrCap));
       string[] modesTxt = { "Async", "Front edge sync", "Back edge sync" };
       Check(chk, "RTSS limiter mód", null, gp.Mode < 0 ? "?" : gp.Mode < 3 ? modesTxt[gp.Mode] : "Egyéb (" + gp.Mode + ")");
+      if (gp.PassiveWait >= 0)
+        Check(chk, "RTSS passive waiting", gp.PassiveWait == 0,
+              gp.PassiveWait == 0 ? "Ki (busy-wait: a legpontosabb limit)" : "Be → a limit pontatlanabb, egyenetlenebb frametime; Ki kell",
+              () => Rtss.SetKey(gp.Path, "PassiveWait", "0"));
     } else if (gpErr != null) Check(chk, "FPS limit (RTSS)", null, "az RTSS profil nem olvasható: " + gpErr);
     else Check(chk, "FPS limit (RTSS)", null, "RTSS nincs telepítve – akkor NVCP Max Frame Rate vagy játékbeli limit, max " + F2(vrrCap));
 
